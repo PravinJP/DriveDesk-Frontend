@@ -1,12 +1,8 @@
 import React from "react";
 
-interface LabelProps {
-  text: string;
-}
-
-const Label: React.FC<LabelProps> = ({ text }) => {
+const Label = ({ text }: { text: string }) => {
   return (
-    <label className="block text-gray-600 text-sm font-medium mt-3 mb-1">
+    <label className="block text-gray-700 text-sm font-semibold mb-2">
       {text}
     </label>
   );

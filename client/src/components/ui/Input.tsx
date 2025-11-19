@@ -1,12 +1,13 @@
 import React from "react";
 
-type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
-
-const Input: React.FC<InputProps> = (props) => {
+const Input = ({ value, onChange, type = "text", placeholder = "" }: any) => {
   return (
     <input
-      {...props}
-      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-gray-50 hover:bg-white"
     />
   );
 };
