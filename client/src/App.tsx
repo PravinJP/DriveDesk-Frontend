@@ -5,7 +5,8 @@ import SignIn from "./pages/SignIn";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
-import CreateTest from "./components/CreateTest"; // ✅ import this
+import CreateTest from "./components/CreateTest";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -13,11 +14,42 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/signin" element={<SignIn />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-        <Route path="/student/dashboard" element={<StudentDashboard />} />
-        {/* ✅ dedicated route for the test creation page */}
-        <Route path="/teacher/create-test" element={<CreateTest />} />
+
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute requiredRole="ADMIN">
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/teacher/dashboard"
+          element={
+            <ProtectedRoute requiredRole="TEACHER">
+              <TeacherDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/teacher/create-test"
+          element={
+            <ProtectedRoute requiredRole="TEACHER">
+              <CreateTest />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/student/dashboard"
+          element={
+            <ProtectedRoute requiredRole="STUDENT">
+              <StudentDashboard />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

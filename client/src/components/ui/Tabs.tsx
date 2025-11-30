@@ -1,116 +1,61 @@
+// components/ui/Tabs.tsx
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 
-interface Job {
-  id: number;
-  companyName: string;
-  role: string;
-  eligibilityBranch: string;
-  eligibilityCgpa: number;
-  deadline: string;
-  description: string;
-  postedByUsername?: string;
-  jdPdfUrl?: string;
-  onClick?: () => void; // ✅ optional click handler
-}
-
-interface Test {
-  title: string;
-  numberOfQuestions: number;
-  duration: number;
-  totalMarks: number;
-  instructions: string;
+interface Tab {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
 }
 
 interface TabsProps {
-  jobs: Job[];
-  tests: Test[];
+  tabs: Tab[];
+  defaultTab?: string;
+  onChange?: (tabId: string) => void;
+  children: (activeTab: string) => React.ReactNode;
 }
 
-const Tabs: React.FC<TabsProps> = ({ jobs, tests }) => {
-  const [activeTab, setActiveTab] = useState("jobs");
+const Tabs: React.FC<TabsProps> = ({ tabs, defaultTab, onChange, children }) => {
+  const [activeTab, setActiveTab] = useState(defaultTab || tabs[0].id);
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    onChange?.(tabId);
+  };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
+    <div className="w-full">
       {/* Tab Header */}
-      <div className="flex border-b mb-6">
-        <button
-          onClick={() => setActiveTab("jobs")}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === "jobs"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-500"
-          }`}
-        >
-          Job Alerts
-        </button>
-        <button
-          onClick={() => setActiveTab("tests")}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === "tests"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-500"
-          }`}
-        >
-          Tests
-        </button>
+      <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-2xl border-2 border-slate-200">
+        {tabs.map((tab) => (
+          <motion.button
+            key={tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`flex-1 px-6 py-3 font-semibold rounded-xl transition-all duration-300 relative ${
+              activeTab === tab.id
+                ? "text-white"
+                : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            {activeTab === tab.id && (
+              <motion.div
+                layoutId="activeTab"
+                className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center justify-center gap-2">
+              {tab.icon}
+              {tab.label}
+            </span>
+          </motion.button>
+        ))}
       </div>
 
       {/* Tab Content */}
-      <div className="space-y-4">
-        {activeTab === "jobs" ? (
-          jobs.length > 0 ? (
-            jobs.map((job) => (
-              <motion.div
-                key={job.id}
-                whileHover={{ scale: 1.02 }}
-                className="p-4 border rounded-xl cursor-pointer hover:bg-blue-50 transition-all"
-                onClick={job.onClick} // ✅ make it clickable
-              >
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    {job.companyName} — {job.role}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Deadline:{" "}
-                    <span className="text-red-600">
-                      {new Date(job.deadline).toLocaleDateString()}
-                    </span>
-                  </p>
-                </div>
-                <p className="text-gray-600 mt-2 line-clamp-2">
-                  {job.description}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  Posted by: {job.postedByUsername || "Unknown"}
-                </p>
-              </motion.div>
-            ))
-          ) : (
-            <p className="text-gray-500">No job alerts available.</p>
-          )
-        ) : tests.length > 0 ? (
-          tests.map((test, i) => (
-            <div
-              key={i}
-              className="p-4 border rounded-xl hover:bg-green-50 transition-all"
-            >
-              <h3 className="text-lg font-semibold text-gray-800">
-                {test.title}
-              </h3>
-              <p className="text-gray-600">
-                {test.numberOfQuestions} Questions • {test.duration} mins •{" "}
-                {test.totalMarks} Marks
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                {test.instructions}
-              </p>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-500">No tests available.</p>
-        )}
-      </div>
+      <div>{children(activeTab)}</div>
     </div>
   );
 };

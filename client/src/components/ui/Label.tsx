@@ -1,9 +1,20 @@
+// components/ui/Label.tsx
 import React from "react";
 
-const Label = ({ text }: { text: string }) => {
+interface LabelProps {
+  text: string;
+  required?: boolean;
+  htmlFor?: string;
+  className?: string;
+}
+
+const Label: React.FC<LabelProps> = ({ text, required = false, htmlFor, className = "" }) => {
   return (
-    <label className="block text-gray-700 text-sm font-semibold mb-2">
-      {text}
+    <label 
+      htmlFor={htmlFor}
+      className={`block text-slate-700 text-sm font-semibold mb-2 ${className}`}
+    >
+      {text} {required && <span className="text-red-500">*</span>}
     </label>
   );
 };
