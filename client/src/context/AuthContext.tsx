@@ -9,24 +9,34 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: false,
   });
 
-  // On mount: Initialize auth from localStorage
+  // Load from localStorage on first mount
   useEffect(() => {
     const token = localStorage.getItem("token");
     const role = localStorage.getItem("role");
+
     if (token && role) {
-      setAuth({ token, role, isAuthenticated: true });
+      setAuth({
+        token,
+        role: role.toUpperCase(),   // 🔥 Normalize role
+        isAuthenticated: true,
+      });
     } else {
       setAuth({ token: null, role: null, isAuthenticated: false });
     }
   }, []);
 
-  // Listen for localStorage changes (cross-tab and in-app updates)
+  // Listen for changes to localStorage (multi-tab sync)
   useEffect(() => {
     const handleStorageChange = () => {
       const token = localStorage.getItem("token");
       const role = localStorage.getItem("role");
+
       if (token && role) {
-        setAuth({ token, role, isAuthenticated: true });
+        setAuth({
+          token,
+          role: role.toUpperCase(),  // 🔥 Normalize here too
+          isAuthenticated: true,
+        });
       } else {
         setAuth({ token: null, role: null, isAuthenticated: false });
       }
@@ -36,12 +46,14 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Login function
   const login = (token, role) => {
     localStorage.setItem("token", token);
-    localStorage.setItem("role", role);
-    setAuth({ token, role, isAuthenticated: true });
+    localStorage.setItem("role", role.toUpperCase()); // 🔥 Always uppercase
+    setAuth({ token, role: role.toUpperCase(), isAuthenticated: true });
   };
 
+  // Logout function
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
