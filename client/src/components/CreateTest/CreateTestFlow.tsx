@@ -1,12 +1,13 @@
 // client/src/components/CreateTest/CreateTestFlow.tsx
-// Triggered from TeacherDashboard when "Create Test" is clicked.
-// Renders as a full-screen overlay over the dashboard.
+// UPDATED: adds AI generation step between Step1 and Step2/Step3.
+// REPLACE your existing CreateTestFlow.tsx with this file.
 
 import React, { useState } from "react";
 import { createTestMetadata, allocateQuestions } from "../../services/testApi";
 import type { McqQuestionForm, CodingQuestionForm } from "../../types/test.types";
-import Step1_TestInfo from "./Step1_TestInfo";
-import Step2_McqQuestions from "./Step2_McqQuestions";
+import Step1_TestInfo       from "./Step1_TestInfo";
+import Step2_AiOrManual     from "./Step2_AiOrManual";   // NEW
+import Step2_McqQuestions   from "./Step2_McqQuestions";
 import Step3_CodingQuestions from "./Step3_CodingQuestions";
 
 interface Props {
@@ -20,67 +21,119 @@ interface Meta {
   duration: number; totalMarks: number; instructions: string;
 }
 
-type WizardStep = 1 | 2 | 3 | "done";
+// Wizard steps including the new AI step
+type WizardStep = "info" | "ai_or_manual" | "mcq" | "coding" | "done";
 
-const STEPS = ["Test Info", "MCQ Questions", "Coding Questions"];
+const STEP_LABELS = ["Test Info", "Add Questions", "Done"];
+const STEP_MAP: Record<WizardStep, number> = {
+  info: 1, ai_or_manual: 2, mcq: 2, coding: 2, done: 3,
+};
+
+const AI_URL = "http://localhost:8080/api/ai/generate-questions";
 
 const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
-  const [step, setStep]       = useState<WizardStep>(1);
+  const [step, setStep]       = useState<WizardStep>("info");
   const [meta, setMeta]       = useState<Meta | null>(null);
   const [testId, setTestId]   = useState<number | null>(null);
   const [mcqQs, setMcqQs]     = useState<McqQuestionForm[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
+  const [aiStatus, setAiStatus] = useState(""); // progress message during AI gen
 
-  const stepNum = step === "done" ? 3 : (step as number);
+  const stepNum = STEP_MAP[step];
 
-  /* Step 1 → create metadata */
+  // ── Step 1: create metadata ────────────────────────────────
   const handleStep1 = async (data: Meta) => {
     setLoading(true); setError("");
     try {
       const id = await createTestMetadata({ ...data, createdByTeacherId: teacherId });
       setTestId(id); setMeta(data);
-      setStep(data.mcqCount > 0 ? 2 : 3);
+      setStep("ai_or_manual");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create test");
     } finally { setLoading(false); }
   };
 
-  /* Step 2 → collect MCQs, move to step 3 */
-  const handleStep2 = (qs: McqQuestionForm[]) => {
-    setMcqQs(qs);
-    if (meta!.codingCount > 0) { setStep(3); }
-    else { publish(qs, []); }
+  // ── AI path: call backend → Claude generates → done ────────
+  const handleAiGenerate = async (topics: {
+    mcqTopic: string; codingTopic: string;
+    difficulty: "easy" | "medium" | "hard";
+  }) => {
+    if (!testId || !meta) return;
+    setLoading(true); setError("");
+    setAiStatus("Sending request to Claude AI…");
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(AI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          testId,
+          mcqTopic:    topics.mcqTopic,
+          codingTopic: topics.codingTopic,
+          mcqCount:    meta.mcqCount,
+          codingCount: meta.codingCount,
+          difficulty:  topics.difficulty,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      setAiStatus("Questions generated! Publishing test…");
+      setStep("done");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "AI generation failed. Please try again.");
+    } finally {
+      setLoading(false);
+      setAiStatus("");
+    }
   };
 
-  /* Step 3 → publish */
-  const handleStep3 = (codingQs: CodingQuestionForm[]) => publish(mcqQs, codingQs);
+  // ── Manual path ────────────────────────────────────────────
+  const handleManual = () => {
+    if (meta && meta.mcqCount > 0) setStep("mcq");
+    else if (meta && meta.codingCount > 0) setStep("coding");
+  };
 
-  const publish = async (mcqs: McqQuestionForm[], codings: CodingQuestionForm[]) => {
+  const handleMcqDone = (qs: McqQuestionForm[]) => {
+    setMcqQs(qs);
+    if (meta && meta.codingCount > 0) setStep("coding");
+    else publishManual(qs, []);
+  };
+
+  const handleCodingDone = (codings: CodingQuestionForm[]) => {
+    publishManual(mcqQs, codings);
+  };
+
+  const publishManual = async (mcqs: McqQuestionForm[], codings: CodingQuestionForm[]) => {
     if (!testId) return;
     setLoading(true); setError("");
     try {
       await allocateQuestions({ testId, questions: [...mcqs, ...codings] });
       setStep("done");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to publish");
+      setError(e instanceof Error ? e.message : "Failed to publish test");
     } finally { setLoading(false); }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex flex-col bg-[#0d1117]"
-      style={{ fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif" }}
-    >
-      {/* ── Top nav ── */}
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-[#0d1117]"
+      style={{ fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif" }}>
+
+      {/* Top nav */}
       <nav className="flex items-center justify-between px-8 py-4 bg-[#161b22] border-b border-[#30363d] shrink-0">
         <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-[#8b949e] hover:text-white transition-colors text-sm font-medium group"
-          >
+          <button onClick={onClose}
+            className="flex items-center gap-2 text-[#8b949e] hover:text-white transition-colors text-sm font-medium group">
             <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" viewBox="0 0 16 16" fill="none">
-              <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             Dashboard
           </button>
@@ -88,12 +141,12 @@ const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
           <span className="text-white font-bold text-base tracking-tight">Create New Test</span>
         </div>
 
+        {/* Progress pills */}
         {step !== "done" && (
           <div className="flex items-center gap-1.5">
-            {STEPS.map((label, i) => {
+            {STEP_LABELS.map((label, i) => {
               const n = i + 1;
-              const active = stepNum === n;
-              const done   = stepNum > n;
+              const active = stepNum === n; const done = stepNum > n;
               return (
                 <React.Fragment key={n}>
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
@@ -116,7 +169,7 @@ const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
         )}
       </nav>
 
-      {/* ── Error banner ── */}
+      {/* Error banner */}
       {error && (
         <div className="mx-8 mt-5 bg-red-900/30 border border-red-700/50 text-red-400 rounded-xl px-5 py-3 text-sm font-medium flex items-center gap-3">
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 16 16" fill="currentColor">
@@ -126,17 +179,46 @@ const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
         </div>
       )}
 
-      {/* ── Step content ── */}
+      {/* AI status message */}
+      {aiStatus && loading && (
+        <div className="mx-8 mt-5 bg-emerald-900/20 border border-emerald-700/30 text-emerald-400 rounded-xl px-5 py-3 text-sm font-medium flex items-center gap-3">
+          <svg className="animate-spin w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"/>
+            <path fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" className="opacity-75"/>
+          </svg>
+          {aiStatus}
+        </div>
+      )}
+
+      {/* Step content */}
       <div className="flex-1 overflow-y-auto">
-        {step === 1 && <Step1_TestInfo onNext={handleStep1} loading={loading} />}
-        {step === 2 && meta && (
-          <Step2_McqQuestions count={meta.mcqCount} onNext={handleStep2} onBack={() => setStep(1)} />
+        {step === "info" && (
+          <Step1_TestInfo onNext={handleStep1} loading={loading} />
         )}
-        {step === 3 && meta && (
+
+        {step === "ai_or_manual" && meta && (
+          <Step2_AiOrManual
+            mcqCount={meta.mcqCount}
+            codingCount={meta.codingCount}
+            onAiGenerate={handleAiGenerate}
+            onManual={handleManual}
+            loading={loading}
+          />
+        )}
+
+        {step === "mcq" && meta && (
+          <Step2_McqQuestions
+            count={meta.mcqCount}
+            onNext={handleMcqDone}
+            onBack={() => setStep("ai_or_manual")}
+          />
+        )}
+
+        {step === "coding" && meta && (
           <Step3_CodingQuestions
             count={meta.codingCount}
-            onSubmit={handleStep3}
-            onBack={() => setStep(meta.mcqCount > 0 ? 2 : 1)}
+            onSubmit={handleCodingDone}
+            onBack={() => setStep(meta.mcqCount > 0 ? "mcq" : "ai_or_manual")}
             loading={loading}
           />
         )}
@@ -150,7 +232,7 @@ const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
                 </svg>
               </div>
               <h2 className="text-4xl font-black text-white mb-3 tracking-tight">Test Published!</h2>
-              <p className="text-[#8b949e] mb-1 text-base">
+              <p className="text-[#8b949e] mb-1">
                 Test <span className="text-emerald-400 font-bold font-mono">#{testId}</span> is now live.
               </p>
               <p className="text-[#6e7681] text-sm mb-10">Students can now take this test from their dashboard.</p>
@@ -159,7 +241,7 @@ const CreateTestFlow: React.FC<Props> = ({ teacherId, onClose, onSuccess }) => {
                   className="px-7 py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all hover:shadow-xl hover:shadow-emerald-500/20 text-sm">
                   Back to Dashboard
                 </button>
-                <button onClick={() => { setStep(1); setMeta(null); setTestId(null); setMcqQs([]); setError(""); }}
+                <button onClick={() => { setStep("info"); setMeta(null); setTestId(null); setMcqQs([]); setError(""); }}
                   className="px-7 py-3 bg-[#21262d] hover:bg-[#2d333b] border border-[#30363d] text-[#cdd9e5] rounded-xl font-bold transition-all text-sm">
                   Create Another
                 </button>
